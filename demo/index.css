@@ -1,0 +1,60 @@
+* {
+  font-family: "Raleway", sans-serif;
+  font-weight: 300;
+  /* font-size: 12px; */
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 100vw;
+  min-height: 100vh;
+  display: flex;
+  padding: 0;
+  margin: 0;
+  --background: #E8ECEF;
+  --paper: white;
+  --paper-pale: #f1f4f6;
+  --color: black;
+  --primary-color: rgb(250, 200, 100);
+  --primary-color-accent: rgb(255, 199, 88);
+  --primary-color-tint: rgb(252, 221, 158);
+  --primary-color-contrast: var(--background);
+  --secondary-color: rgb(102, 155, 70);
+  --secondary-color-lighten: rgb(121, 172, 89);
+  --secondary-color-contrast: var(--background);
+  --danger-color: rgb(235, 96, 107);
+  --danger-color-lighten: rgb(238, 115, 125);
+  --danger-color-contrast: var(--background);
+  -moz-osx-font-smoothing: grayscale;
+}
+
+dynamic-form {
+  flex: 1 1 auto;
+  max-width: 1000px;
+}
+
+dynamic-form img {
+  width: 50px;
+  height: auto;
+  margin-bottom: 20px;
+  animation: spinY 5s ease infinite;
+}
+
+@keyframes spinY {
+  from {
+    transform: rotateY(0deg);
+  }
+
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+.input-group {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.skill-progress {
+  margin: 20px;
+}

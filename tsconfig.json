@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "baseUrl": "./",
+    "importsNotUsedAsValues": "preserve",
+    "lib": ["DOM", "esnext"],
+    "moduleResolution": "node",
+    "paths": {
+      "@smooth-modal": ["./src/index.ts"]
+    }
+  },
+  "include": [
+    //"docs-src/**/*",
+    "src",
+  ]
+}
