@@ -5,7 +5,6 @@
   export { isDefaultProp as default };
 
   $: isDefault = isDefaultProp || isDefaultProp === "";
-  $: console.log({ isDefault });
 </script>
 
 <button class:default={isDefault}>
@@ -21,17 +20,16 @@
     flex: 1 1 auto;
     padding: 1.2em 2ch;
     border: none;
-    // outline: none;
     background-color: rgba(242, 242, 242);
     text-align: center;
+    cursor: pointer;
     &.default {
       background-color: var(--primary-color);
       color: var(--primary-color-contrast);
       font-weight: bold;
     }
-    // &:focus {
-    //   padding: calc(1.2em - 2px) 2ch;
-    //   border: 2px dotted silver;
-    // }
+    &:hover {
+      filter: brightness(1.04);
+    }
   }
 </style>

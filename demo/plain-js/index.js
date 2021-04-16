@@ -1,4 +1,4 @@
-import { SmoothModal } from "./lib/smooth-modal.js";
+import { SmoothModal } from "../lib/smooth-modal.js";
 
 window.SmoothModal = SmoothModal;
 
@@ -11,24 +11,64 @@ const lorem =
 
 let counter = 1;
 
-const showOneMoreModal = (canHaveSufix = false) => {
-  const sufix = canHaveSufix && Math.random() < 0.5 ? lorem : "";
-  SmoothModal.alert({
-    ok_button_label: "OK",
-    message: Math.round(Math.random() * 1000) + sufix,
-    title: "Alert " + counter++,
-    onAction: handleModalResponse,
-  });
-}
+document.getElementById("nested-modals-button").onclick = () => {
+  const showOneMoreModal = (canHaveSufix = false) => {
+    const sufix = canHaveSufix && Math.random() < 0.5 ? lorem : "";
+    SmoothModal.alert({
+      ok_button_label: "OK",
+      message: Math.round(Math.random() * 1000) + sufix,
+      title: "Alert " + counter++,
+      onResponse: handleModalResponse,
+    });
+  };
 
-const handleModalResponse = (event) => {
-  if (event.detail) {
+  const handleModalResponse = ({ action }) => {
+    console.log({ action });
+  };
+
+  for (let i = 0; i < 10; i++) {
     showOneMoreModal(true);
   }
 };
 
-for (let i = 0; i < 3; i++) {
-  showOneMoreModal(true);
-}
+document.getElementById("conditionals-modals-button").onclick = () => {
+  function showMustAcceptModal() {
+    SmoothModal.alert({
+      ok_button_label: "OK",
+      message: "Click 'I accept' you little turd!",
+      title: "You have to!",
+    });
+    setTimeout(moreScaryModalRef.destroy, 500);
+  }
 
-document.body.onclick = showOneMoreModal;
+  let moreScaryModalRef
+  function showMoreScaryConfirm() {
+    moreScaryModalRef = SmoothModal.confirm({
+      ok_button_label: "Argh, OK",
+      cancel_button_label: "Go away!",
+      message: "We are sorry, but this is not optional.",
+      title: "This is not optional",
+      onResponse: ({ action }) => {
+        console.log({ action });
+        if (action === "dismiss") {
+          showMustAcceptModal();
+          return true;
+        }
+      },
+    });
+  }
+
+  SmoothModal.confirm({
+    ok_button_label: "I accept",
+    cancel_button_label: "No",
+    message: "Do you accept our nasty Terms & Conditions?",
+    title: "Please accept this",
+    onResponse: ({ action }) => {
+      console.log({ action });
+      if (action === "dismiss") {
+        showMoreScaryConfirm();
+        return true;
+      }
+    },
+  });
+};

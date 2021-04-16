@@ -15,10 +15,20 @@
 
   export let maxVisible = 4;
 
+  const removeModalById = (id: number) => {
+    const index = modalStack.findIndex((modalOptions => modalOptions.id === id));
+    if (index >= 0) {
+      modalStack.splice(index, 1);
+      modalStack = modalStack;
+    }
+  }
+
   export const showModal = (options: SmoothModalOptions) => {
-    modalStack = [...modalStack, { ...options, id: autoId++ }];
-    const promise: any = new Promise((resolve, reject) => {});
-    return promise;
+    const id = autoId++;
+    modalStack = [...modalStack, { ...options, id }];
+    return {
+      destroy: () => removeModalById(id),
+    }
   };
 
   export const dismissLast = () => {
@@ -35,14 +45,48 @@
   $: visibleState = modalStack.length > 0;
   $: modalsCount = modalStack.length;
 
+  const tryDismissLast = (
+    reason?: 'Enter' | 'Escape' | 'backdrop' | Event
+  ): boolean => {
+    if (modalsCount > 0) {
+      const {
+        modalProps,
+        canDismissOnBackdrop,
+        canDismissOnEscapeKey,
+        canDismissOnEnterKey,
+      } = modalStack[modalStack.length - 1];
+
+      let stopDismiss = false;
+      let response;
+      if (reason instanceof CustomEvent) {
+        response = reason.detail;
+      } else if (
+        (reason === 'backdrop' && canDismissOnBackdrop) ||
+        (reason === 'Enter' && canDismissOnEnterKey) ||
+        (reason === 'Escape' && canDismissOnEscapeKey)
+      ) {
+        response = { action: reason === 'Enter' ? 'confirm' : 'dismiss' };
+      } else {
+        stopDismiss = true;
+      }
+
+      if (response && typeof modalProps.onResponse === 'function') {
+        stopDismiss = Boolean(modalProps.onResponse(response));
+      }
+
+      if (!stopDismiss) dismissLast();
+      return !stopDismiss;
+    }
+  };
+
   $: if (lastVisibleState !== visibleState) {
     lastVisibleState = visibleState;
     if (visibleState) {
       document.body.style.overflow = 'hidden';
-      document.addEventListener('keydown', handleKeyPress, true);
+      document.addEventListener('keydown', handleKeyDown);
     } else {
       document.body.style.overflow = 'visible';
-      document.removeEventListener('keydown', handleKeyPress, true);
+      document.removeEventListener('keydown', handleKeyDown);
     }
   }
 
@@ -64,14 +108,10 @@
   });
 
   $: if (backdropElement && modalStackElement) {
-    console.log({
-      backdropHeight,
-      modalStackHeight,
-      transform: `translateY(${(backdropHeight - modalStackHeight) / 2}px)`,
-    });
     modalStackElement.style.transform = `translateY(${
       (backdropHeight - modalStackHeight) / 2
     }px)`;
+
     if (!backdropElementTransitions) {
       backdropElementTransitions = true;
       requestAnimationFrame(() =>
@@ -82,12 +122,12 @@
     }
   }
 
-  function handleKeyPress(event: KeyboardEvent) {
-    console.log('handleKeyPress');
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      event.preventDefault();
-      dismissLast();
+  function handleKeyDown(event: KeyboardEvent) {
+    if (event.key === 'Escape' || event.key === 'Enter') {
+      if (tryDismissLast(event.key)) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
     }
   }
 
@@ -103,7 +143,7 @@
     class="smooth-modal-backdrop"
     in:fadeIn
     out:fadeOut
-    on:click|stopPropagation={dismissLast}
+    on:click|stopPropagation={() => tryDismissLast('backdrop')}
   >
     <div
       bind:clientHeight={modalStackHeight}
@@ -135,6 +175,7 @@
           >
             <div
               class="smooth-modal-wrapper"
+              on:action={tryDismissLast}
               on:click|stopPropagation
               use:insertCustomElement={{
                 tagName: modalComponent,

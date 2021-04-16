@@ -1,10 +1,12 @@
-<svelte:options tag="smooth-modal-alert" />
+<svelte:options tag="smooth-modal-confirm" />
 
 <script lang="ts">
-  import { dispatchModalAction } from '@smooth-modal';
+import { dispatchModalAction } from "@smooth-modal";
+
 
   export let title: string = null;
   export let message: string = 'no message';
+  export let cancel_button_label: string = 'Cancel';
   export let ok_button_label: string = 'OK';
   export let onDismiss: Function = null;
 
@@ -21,11 +23,10 @@
   </div>
 
   <smooth-modal-footer slot="footer">
-    <!-- <smooth-modal-button>Cancel</smooth-modal-button> -->
-    <smooth-modal-button
-      default
-      on:click={() => dispatchModalAction(rootElement, 'confirm')}
-    >
+    <smooth-modal-button on:click={() => dispatchModalAction(rootElement, 'dismiss')}>
+      {cancel_button_label}
+    </smooth-modal-button>
+    <smooth-modal-button default on:click={() => dispatchModalAction(rootElement, 'confirm')}>
       {ok_button_label}
     </smooth-modal-button>
   </smooth-modal-footer>

@@ -12,12 +12,10 @@ export function fadeIn(
         const initialTransform = node.style.transform;
         if (animateTransform) {
           const matrix = window.getComputedStyle(node).transform;
-          console.log(matrix);
-          const matrixValues = matrix
-            .match(/matrix.*\((.+)\)/)[1]
-            .split(', ');
-          const matrixType = matrix.includes('3d') ? '3d' : '2d';
-          let x, y, z;
+          const matrixType = matrix.includes('3d') ? '3d' : matrix.includes('2d') ? '2d' : null;
+          const matrixMatch = matrix.match(/matrix.*\((.+)\)/)
+          const matrixValues = matrixMatch ? matrixMatch[1].split(', '): null;
+          let x = 0, y = 0, z = 0;
           if (matrixType === '2d') {
             x = parseFloat(matrixValues[4]);
             y = parseFloat(matrixValues[5]);

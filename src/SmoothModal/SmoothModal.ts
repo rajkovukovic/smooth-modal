@@ -17,7 +17,18 @@ class SmoothModalClass {
     return this._backdropInstance.showModal({
       modalComponent: "smooth-modal-alert",
       modalProps,
-    } as SmoothModalOptions);
+      canDismissOnEnterKey: true,
+      canDismissOnEscapeKey: true,
+    });
+  }
+
+  public confirm(modalProps: Record<string, any>): Promise<boolean> {
+    return this._backdropInstance.showModal({
+      modalComponent: "smooth-modal-confirm",
+      modalProps,
+      canDismissOnEnterKey: true,
+      canDismissOnEscapeKey: true,
+    });
   }
 
   public dismissLast(): void {

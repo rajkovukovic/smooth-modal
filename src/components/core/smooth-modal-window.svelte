@@ -1,9 +1,21 @@
 <svelte:options tag="smooth-modal-window" />
 
 <script lang="ts">
+  import { dispatchModalAction } from '@smooth-modal';
+
+  let rootElement;
+
+  // function handleKeyDown(event: KeyboardEvent) {
+  //   console.log(event.key);
+  //   if (event.key === 'Enter') {
+  //     event.stopPropagation();
+  //     event.preventDefault();
+  //     dispatchModalAction(rootElement, 'confirm');
+  //   }
+  // }
 </script>
 
-<div class="smooth-modal" on:click>
+<div bind:this={rootElement} class="smooth-modal" on:click>
   <div class="header">
     <slot name="header" />
   </div>

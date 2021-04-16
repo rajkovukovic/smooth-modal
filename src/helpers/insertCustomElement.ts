@@ -40,6 +40,7 @@ export function insertCustomElement(
       eventArgsArray.forEach(eventArgs => child.addEventListener.apply(null, eventArgs));
       lastEvents = events;
       lastNormalizedEvents = eventArgsArray;
+      console.log('attachEvents', { child, eventArgsArray })
     }
   }
 
