@@ -13,10 +13,10 @@ class SmoothModalClass {
     return this._rootElement;
   }
 
-  public alert(message: string): Promise<boolean> {
+  public alert(modalProps: Record<string, any>): Promise<boolean> {
     return this._backdropInstance.showModal({
-      modalComponent: "smooth-modal",
-      modalProps: { message }
+      modalComponent: "smooth-modal-window",
+      modalProps,
     } as SmoothModalOptions);
   }
 

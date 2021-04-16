@@ -53,6 +53,7 @@ export function insertCustomElement(
 
   const createAndMountChild = (tagName: string) => {
     child = document.createElement(tagName);
+    child.style.maxHeight = '100%';
     node.appendChild(child);
     lastTagName = tagName;
   }
@@ -86,7 +87,6 @@ export function insertCustomElement(
     unmountChild();
   }
 
-  console.log({ tagName, props, events });
   createAndMountChild(tagName);
   setProps(child, props);
   attachEvents(child, events);

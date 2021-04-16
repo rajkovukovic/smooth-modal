@@ -1,14 +1,19 @@
 <svelte:options tag="smooth-modal-backdrop" />
 
 <script lang="ts">
-  import { sineIn, sineOut } from 'svelte/easing';
   import {
+    fadeIn,
+    fadeOut,
     insertCustomElement,
     InternalSmoothModalOptions,
     SmoothModalOptions,
+    trapFocus,
   } from '@smooth-modal';
+  import { afterUpdate } from 'svelte';
 
   let autoId = 1;
+
+  export let maxVisible = 4;
 
   export const showModal = (options: SmoothModalOptions) => {
     modalStack = [...modalStack, { ...options, id: autoId++ }];
@@ -39,54 +44,52 @@
       document.body.style.overflow = 'visible';
       document.removeEventListener('keydown', handleKeyPress, true);
     }
-    // TODO: disable document.body scroll
-    // TODO: add ESC-key event listener
   }
 
-  function fadeIn(node: HTMLElement, { duration = 300 }) {
-    let didTick = false;
-    return {
-      duration,
-      tick: (t) => {
-        if (!didTick) {
-          didTick = true;
-          node.style.opacity = '0';
-          const initialTransform = node.style.transform;
-          node.style.transform = `translate3d(0, ${50}px, 0)`;
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => {
-              node.style.opacity = '1';
-              node.style.transform = initialTransform;
-            })
-          );
-        }
-      },
-    };
-  }
+  let backdropElement: HTMLDivElement;
+  let modalStackElement: HTMLDivElement;
+  let backdropHeight = 0;
+  let modalStackHeight = 0;
+  let backdropElementTransitions = false;
 
-  function fadeOut(node: HTMLElement, { duration = 300 }) {
-    let didTick = false;
-    return {
-      duration,
-      tick: (t) => {
-        if (!didTick) {
-          didTick = true;
-          node.classList.add('outro');
-          node.style.opacity = '0';
-          node.style.transform = `translate3d(0, ${200}px, 0)`;
-        }
-      },
-    };
+  afterUpdate(() => {
+    if (backdropElement && modalStackElement) {
+      if (backdropHeight !== backdropElement.clientHeight) {
+        backdropHeight = backdropElement.clientHeight;
+      }
+      if (modalStackHeight !== modalStackElement.clientHeight) {
+        modalStackHeight = modalStackElement.clientHeight;
+      }
+    }
+  });
+
+  $: if (backdropElement && modalStackElement) {
+    console.log({
+      backdropHeight,
+      modalStackHeight,
+      transform: `translateY(${(backdropHeight - modalStackHeight) / 2}px)`,
+    });
+    modalStackElement.style.transform = `translateY(${
+      (backdropHeight - modalStackHeight) / 2
+    }px)`;
+    if (!backdropElementTransitions) {
+      backdropElementTransitions = true;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          modalStackElement.style.transition = 'transform 250ms ease-out';
+        })
+      );
+    }
   }
 
   function handleKeyPress(event: KeyboardEvent) {
     console.log('handleKeyPress');
-    if(event.key === "Escape") {
+    if (event.key === 'Escape') {
       event.stopPropagation();
       event.preventDefault();
       dismissLast();
     }
-}
+  }
 
   function throwError(message: string) {
     throw new Error(message);
@@ -94,8 +97,19 @@
 </script>
 
 {#if visibleState}
-  <div class="smooth-modal-backdrop" on:click|stopPropagation={dismissLast}>
-    <div class="modals-stack">
+  <div
+    bind:clientHeight={backdropHeight}
+    bind:this={backdropElement}
+    class="smooth-modal-backdrop"
+    in:fadeIn
+    out:fadeOut
+    on:click|stopPropagation={dismissLast}
+  >
+    <div
+      bind:clientHeight={modalStackHeight}
+      bind:this={modalStackElement}
+      class="modal-stack"
+    >
       {#each modalStack as { modalComponent, modalProps, id }, index (id)}
         {#if typeof modalComponent === 'function'}
           <div class="smooth-modal-wrapper">
@@ -104,26 +118,28 @@
             </div>
           </div>
         {:else if typeof modalComponent === 'string'}
-            <div
-              class="smooth-modal-transform-wrapper"
-              class:disabled={index < modalsCount - 1}
-              on:click|stopPropagation
-              in:fadeIn
-              out:fadeOut
-              style="
+          <div
+            class="smooth-modal-transform-wrapper"
+            class:disabled={index < modalsCount - 1}
+            class:hidden={modalsCount - index >= maxVisible + 1}
+            on:click|stopPropagation
+            in:fadeIn={{ animateTransform: true }}
+            out:fadeOut={{ animateTransform: true }}
+            style="
               transform: translate3d(0, {-50 *
-                (modalsCount - index - 1)}px, {-200 *
-                (modalsCount - index - 1)}px);
+              (modalsCount - index - 1)}px, {-200 *
+              (modalsCount - index - 1)}px);
               filter: {index <
-              modalsCount - 1
-                ? 'brightness(0.6) grayscale(1)'
-                : 'none'};"
-              use:insertCustomElement={{
-                tagName: modalComponent,
-                props: modalProps,
-                events: null,
-              }}
-            />
+            modalsCount - 1
+              ? 'brightness(50%)'
+              : 'brightness(100%)'};"
+            use:insertCustomElement={{
+              tagName: modalComponent,
+              props: modalProps,
+              events: null,
+            }}
+            use:trapFocus={index === modalsCount - 1}
+          />
         {:else}
           {throwError(
             `modalComponent must be of type "SvelteComponent" or "string", got "${typeof modalComponent}" instead.`
@@ -146,22 +162,27 @@
     right: 0;
     bottom: 0;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: flex-start;
     align-items: center;
     background-color: rgba(0, 0, 0, 0.6);
     z-index: 10000;
   }
 
-  .modals-stack {
+  .modal-stack {
     position: relative;
     display: grid;
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
-    max-width: 80%;
-    max-height: 80%;
+    max-width: 100%;
+    max-height: 90%;
     transform-style: preserve-3d;
-    perspective-origin: 50% 50%;
+    perspective-origin: 50% 0;
     perspective: 600px;
+    @media (min-width: 480px) {
+      max-width: 80%;
+      max-height: 80%;
+    }
   }
 
   .smooth-modal-transform-wrapper {
@@ -171,14 +192,15 @@
     flex-wrap: nowrap;
     justify-content: flex-start;
     align-items: center;
+    min-height: 0;
+    max-height: 100%;
     &.disabled {
       pointer-events: none;
     }
     transform-style: preserve-3d;
-    perspective-origin: 50% 50%;
-    transition: transform 200ms ease-in, opacity 200ms ease-in;
-    &.outro {
-      transition: transform 200ms ease-in, opacity 200ms ease-out;
+    perspective-origin: 50% 0;
+    &.hidden {
+      display: none;
     }
   }
 </style>

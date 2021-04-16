@@ -114,6 +114,59 @@ function set_data(text, data) {
 function set_style(node, key, value, important) {
     node.style.setProperty(key, value, important ? 'important' : '');
 }
+// unfortunately this can't be a constant as that wouldn't be tree-shakeable
+// so we cache the result instead
+let crossorigin;
+function is_crossorigin() {
+    if (crossorigin === undefined) {
+        crossorigin = false;
+        try {
+            if (typeof window !== 'undefined' && window.parent) {
+                void window.parent.document;
+            }
+        }
+        catch (error) {
+            crossorigin = true;
+        }
+    }
+    return crossorigin;
+}
+function add_resize_listener(node, fn) {
+    const computed_style = getComputedStyle(node);
+    if (computed_style.position === 'static') {
+        node.style.position = 'relative';
+    }
+    const iframe = element('iframe');
+    iframe.setAttribute('style', 'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; ' +
+        'overflow: hidden; border: 0; opacity: 0; pointer-events: none; z-index: -1;');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.tabIndex = -1;
+    const crossorigin = is_crossorigin();
+    let unsubscribe;
+    if (crossorigin) {
+        iframe.src = "data:text/html,<script>onresize=function(){parent.postMessage(0,'*')}</script>";
+        unsubscribe = listen(window, 'message', (event) => {
+            if (event.source === iframe.contentWindow)
+                fn();
+        });
+    }
+    else {
+        iframe.src = 'about:blank';
+        iframe.onload = () => {
+            unsubscribe = listen(iframe.contentWindow, 'resize', fn);
+        };
+    }
+    append(node, iframe);
+    return () => {
+        if (crossorigin) {
+            unsubscribe();
+        }
+        else if (unsubscribe && iframe.contentWindow) {
+            unsubscribe();
+        }
+        detach(iframe);
+    };
+}
 function toggle_class(element, name, toggle) {
     element.classList[toggle ? 'add' : 'remove'](name);
 }
@@ -194,6 +247,14 @@ function clear_rules() {
 let current_component;
 function set_current_component(component) {
     current_component = component;
+}
+function get_current_component() {
+    if (!current_component)
+        throw new Error('Function called outside component initialization');
+    return current_component;
+}
+function afterUpdate(fn) {
+    get_current_component().$$.after_update.push(fn);
 }
 // TODO figure out if we still want to support
 // shorthand events, or if we want to implement
@@ -711,10 +772,10 @@ class SmoothModalClass {
     get rootElement() {
         return this._rootElement;
     }
-    alert(message) {
+    alert(modalProps) {
         return this._backdropInstance.showModal({
-            modalComponent: "smooth-modal",
-            modalProps: { message }
+            modalComponent: "smooth-modal-window",
+            modalProps,
         });
     }
     dismissLast() {
@@ -722,6 +783,74 @@ class SmoothModalClass {
     }
 }
 const SmoothModal = new SmoothModalClass();
+
+function fadeIn(node, { animateTransform = false, duration = 200 }) {
+    let didTick = false;
+    return {
+        duration,
+        tick: (t) => {
+            if (!didTick) {
+                didTick = true;
+                node.style.opacity = '0';
+                const initialTransform = node.style.transform;
+                if (animateTransform) {
+                    const matrix = window.getComputedStyle(node).transform;
+                    console.log(matrix);
+                    const matrixValues = matrix
+                        .match(/matrix.*\((.+)\)/)[1]
+                        .split(', ');
+                    const matrixType = matrix.includes('3d') ? '3d' : '2d';
+                    let y, z;
+                    if (matrixType === '2d') {
+                        parseFloat(matrixValues[4]);
+                        y = parseFloat(matrixValues[5]);
+                        z = 0;
+                    }
+                    else if (matrixType === '3d') {
+                        parseFloat(matrixValues[12]);
+                        y = parseFloat(matrixValues[13]);
+                        z = parseFloat(matrixValues[14]);
+                    }
+                    y = Number.isFinite(y) ? y : 0;
+                    z = Number.isFinite(z) ? z : 0;
+                    node.style.transform = `translate3d(0px, ${y + 50}px, ${z + 100}px)`;
+                }
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    node.style.transition = `transform ${duration}ms ease-in, opacity ${duration}ms ease-in, filter ${duration}ms ease-in`;
+                    node.style.opacity = '1';
+                    if (animateTransform) {
+                        node.style.transform = initialTransform;
+                    }
+                }));
+            }
+        },
+    };
+}
+function fadeOut(node, { animateTransform = false, duration = 200 }) {
+    let didTick = false;
+    return {
+        duration,
+        tick: (t) => {
+            if (!didTick) {
+                didTick = true;
+                node.style.opacity = '0';
+                if (animateTransform) {
+                    node.style.transform = `translate3d(0, ${200}px, 0) scale(0.5)`;
+                }
+            }
+        },
+    };
+}
+
+function trapFocus(node, active) {
+    // let trap;
+    // console.log('trapFocus', active, node);
+    // trap = focusTrap.createFocusTrap(node);
+    // if (active) trap.activate();
+    // return {
+    //   update: (active) => active ? trap.activate() : trap.deactivate(),
+    // }
+}
 
 function insertCustomElement(node, { tagName, props, events, }) {
     let child;
@@ -755,6 +884,7 @@ function insertCustomElement(node, { tagName, props, events, }) {
     };
     const createAndMountChild = (tagName) => {
         child = document.createElement(tagName);
+        child.style.maxHeight = '100%';
         node.appendChild(child);
         lastTagName = tagName;
     };
@@ -781,7 +911,6 @@ function insertCustomElement(node, { tagName, props, events, }) {
     const destroy = () => {
         unmountChild();
     };
-    console.log({ tagName, props, events });
     createAndMountChild(tagName);
     setProps(child, props);
     attachEvents(child, events);
@@ -795,24 +924,28 @@ function insertCustomElement(node, { tagName, props, events, }) {
 
 function get_each_context(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[10] = list[i].modalComponent;
-	child_ctx[11] = list[i].modalProps;
-	child_ctx[12] = list[i].id;
-	child_ctx[14] = i;
+	child_ctx[20] = list[i].modalComponent;
+	child_ctx[21] = list[i].modalProps;
+	child_ctx[22] = list[i].id;
+	child_ctx[24] = i;
 	return child_ctx;
 }
 
-// (79:0) {#if visibleState}
+// (75:0) {#if visibleState}
 function create_if_block(ctx) {
 	let div1;
 	let div0;
 	let each_blocks = [];
 	let each_1_lookup = new Map();
+	let div0_resize_listener;
+	let div1_resize_listener;
+	let div1_intro;
+	let div1_outro;
 	let current;
 	let mounted;
 	let dispose;
-	let each_value = /*modalStack*/ ctx[1];
-	const get_key = ctx => /*id*/ ctx[12];
+	let each_value = /*modalStack*/ ctx[2];
+	const get_key = ctx => /*id*/ ctx[22];
 
 	for (let i = 0; i < each_value.length; i += 1) {
 		let child_ctx = get_each_context(ctx, each_value, i);
@@ -829,8 +962,10 @@ function create_if_block(ctx) {
 				each_blocks[i].c();
 			}
 
-			attr(div0, "class", "modals-stack");
+			attr(div0, "class", "modal-stack");
+			add_render_callback(() => /*div0_elementresize_handler*/ ctx[14].call(div0));
 			attr(div1, "class", "smooth-modal-backdrop");
+			add_render_callback(() => /*div1_elementresize_handler*/ ctx[16].call(div1));
 		},
 		m(target, anchor) {
 			insert(target, div1, anchor);
@@ -840,16 +975,20 @@ function create_if_block(ctx) {
 				each_blocks[i].m(div0, null);
 			}
 
+			div0_resize_listener = add_resize_listener(div0, /*div0_elementresize_handler*/ ctx[14].bind(div0));
+			/*div0_binding*/ ctx[15](div0);
+			div1_resize_listener = add_resize_listener(div1, /*div1_elementresize_handler*/ ctx[16].bind(div1));
+			/*div1_binding*/ ctx[17](div1);
 			current = true;
 
 			if (!mounted) {
-				dispose = listen(div1, "click", stop_propagation(/*dismissLast*/ ctx[0]));
+				dispose = listen(div1, "click", stop_propagation(/*dismissLast*/ ctx[1]));
 				mounted = true;
 			}
 		},
 		p(ctx, dirty) {
-			if (dirty & /*modalStack, modalsCount, throwError*/ 10) {
-				each_value = /*modalStack*/ ctx[1];
+			if (dirty & /*modalStack, modalsCount, maxVisible, throwError*/ 261) {
+				each_value = /*modalStack*/ ctx[2];
 				group_outros();
 				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each_1_lookup, div0, outro_and_destroy_block, create_each_block, null, get_each_context);
 				check_outros();
@@ -862,6 +1001,12 @@ function create_if_block(ctx) {
 				transition_in(each_blocks[i]);
 			}
 
+			add_render_callback(() => {
+				if (div1_outro) div1_outro.end(1);
+				if (!div1_intro) div1_intro = create_in_transition(div1, fadeIn, {});
+				div1_intro.start();
+			});
+
 			current = true;
 		},
 		o(local) {
@@ -869,6 +1014,8 @@ function create_if_block(ctx) {
 				transition_out(each_blocks[i]);
 			}
 
+			if (div1_intro) div1_intro.invalidate();
+			div1_outro = create_out_transition(div1, fadeOut, {});
 			current = false;
 		},
 		d(detaching) {
@@ -878,15 +1025,20 @@ function create_if_block(ctx) {
 				each_blocks[i].d();
 			}
 
+			div0_resize_listener();
+			/*div0_binding*/ ctx[15](null);
+			div1_resize_listener();
+			/*div1_binding*/ ctx[17](null);
+			if (detaching && div1_outro) div1_outro.end();
 			mounted = false;
 			dispose();
 		}
 	};
 }
 
-// (110:8) {:else}
+// (119:8) {:else}
 function create_else_block(ctx) {
-	let t_value = throwError(`modalComponent must be of type "SvelteComponent" or "string", got "${typeof /*modalComponent*/ ctx[10]}" instead.`) + "";
+	let t_value = throwError(`modalComponent must be of type "SvelteComponent" or "string", got "${typeof /*modalComponent*/ ctx[20]}" instead.`) + "";
 	let t;
 
 	return {
@@ -897,7 +1049,7 @@ function create_else_block(ctx) {
 			insert(target, t, anchor);
 		},
 		p(ctx, dirty) {
-			if (dirty & /*modalStack*/ 2 && t_value !== (t_value = throwError(`modalComponent must be of type "SvelteComponent" or "string", got "${typeof /*modalComponent*/ ctx[10]}" instead.`) + "")) set_data(t, t_value);
+			if (dirty & /*modalStack*/ 4 && t_value !== (t_value = throwError(`modalComponent must be of type "SvelteComponent" or "string", got "${typeof /*modalComponent*/ ctx[20]}" instead.`) + "")) set_data(t, t_value);
 		},
 		i: noop,
 		o: noop,
@@ -907,10 +1059,11 @@ function create_else_block(ctx) {
 	};
 }
 
-// (89:53) 
+// (96:53) 
 function create_if_block_2(ctx) {
 	let div;
 	let insertCustomElement_action;
+	let trapFocus_action;
 	let div_intro;
 	let div_outro;
 	let current;
@@ -921,13 +1074,14 @@ function create_if_block_2(ctx) {
 		c() {
 			div = element("div");
 			attr(div, "class", "smooth-modal-transform-wrapper");
-			set_style(div, "transform", "translate3d(0, " + -50 * (/*modalsCount*/ ctx[3] - /*index*/ ctx[14] - 1) + "px, " + -200 * (/*modalsCount*/ ctx[3] - /*index*/ ctx[14] - 1) + "px)");
+			set_style(div, "transform", "translate3d(0, " + -50 * (/*modalsCount*/ ctx[8] - /*index*/ ctx[24] - 1) + "px, " + -200 * (/*modalsCount*/ ctx[8] - /*index*/ ctx[24] - 1) + "px)");
 
-			set_style(div, "filter", /*index*/ ctx[14] < /*modalsCount*/ ctx[3] - 1
-			? "brightness(0.6) grayscale(1)"
-			: "none");
+			set_style(div, "filter", /*index*/ ctx[24] < /*modalsCount*/ ctx[8] - 1
+			? "brightness(50%)"
+			: "brightness(100%)");
 
-			toggle_class(div, "disabled", /*index*/ ctx[14] < /*modalsCount*/ ctx[3] - 1);
+			toggle_class(div, "disabled", /*index*/ ctx[24] < /*modalsCount*/ ctx[8] - 1);
+			toggle_class(div, "hidden", /*modalsCount*/ ctx[8] - /*index*/ ctx[24] >= /*maxVisible*/ ctx[0] + 1);
 		},
 		m(target, anchor) {
 			insert(target, div, anchor);
@@ -935,12 +1089,13 @@ function create_if_block_2(ctx) {
 
 			if (!mounted) {
 				dispose = [
-					listen(div, "click", stop_propagation(/*click_handler*/ ctx[7])),
+					listen(div, "click", stop_propagation(/*click_handler*/ ctx[13])),
 					action_destroyer(insertCustomElement_action = insertCustomElement.call(null, div, {
-						tagName: /*modalComponent*/ ctx[10],
-						props: /*modalProps*/ ctx[11],
+						tagName: /*modalComponent*/ ctx[20],
+						props: /*modalProps*/ ctx[21],
 						events: null
-					}))
+					})),
+					action_destroyer(trapFocus_action = trapFocus.call(null, div, /*index*/ ctx[24] === /*modalsCount*/ ctx[8] - 1))
 				];
 
 				mounted = true;
@@ -949,24 +1104,30 @@ function create_if_block_2(ctx) {
 		p(new_ctx, dirty) {
 			ctx = new_ctx;
 
-			if (!current || dirty & /*modalsCount, modalStack*/ 10) {
-				set_style(div, "transform", "translate3d(0, " + -50 * (/*modalsCount*/ ctx[3] - /*index*/ ctx[14] - 1) + "px, " + -200 * (/*modalsCount*/ ctx[3] - /*index*/ ctx[14] - 1) + "px)");
+			if (!current || dirty & /*modalsCount, modalStack*/ 260) {
+				set_style(div, "transform", "translate3d(0, " + -50 * (/*modalsCount*/ ctx[8] - /*index*/ ctx[24] - 1) + "px, " + -200 * (/*modalsCount*/ ctx[8] - /*index*/ ctx[24] - 1) + "px)");
 			}
 
-			if (!current || dirty & /*modalStack, modalsCount*/ 10) {
-				set_style(div, "filter", /*index*/ ctx[14] < /*modalsCount*/ ctx[3] - 1
-				? "brightness(0.6) grayscale(1)"
-				: "none");
+			if (!current || dirty & /*modalStack, modalsCount*/ 260) {
+				set_style(div, "filter", /*index*/ ctx[24] < /*modalsCount*/ ctx[8] - 1
+				? "brightness(50%)"
+				: "brightness(100%)");
 			}
 
-			if (insertCustomElement_action && is_function(insertCustomElement_action.update) && dirty & /*modalStack*/ 2) insertCustomElement_action.update.call(null, {
-				tagName: /*modalComponent*/ ctx[10],
-				props: /*modalProps*/ ctx[11],
+			if (insertCustomElement_action && is_function(insertCustomElement_action.update) && dirty & /*modalStack*/ 4) insertCustomElement_action.update.call(null, {
+				tagName: /*modalComponent*/ ctx[20],
+				props: /*modalProps*/ ctx[21],
 				events: null
 			});
 
-			if (dirty & /*modalStack, modalsCount*/ 10) {
-				toggle_class(div, "disabled", /*index*/ ctx[14] < /*modalsCount*/ ctx[3] - 1);
+			if (trapFocus_action && is_function(trapFocus_action.update) && dirty & /*modalStack, modalsCount*/ 260) trapFocus_action.update.call(null, /*index*/ ctx[24] === /*modalsCount*/ ctx[8] - 1);
+
+			if (dirty & /*modalStack, modalsCount*/ 260) {
+				toggle_class(div, "disabled", /*index*/ ctx[24] < /*modalsCount*/ ctx[8] - 1);
+			}
+
+			if (dirty & /*modalsCount, modalStack, maxVisible*/ 261) {
+				toggle_class(div, "hidden", /*modalsCount*/ ctx[8] - /*index*/ ctx[24] >= /*maxVisible*/ ctx[0] + 1);
 			}
 		},
 		i(local) {
@@ -974,7 +1135,7 @@ function create_if_block_2(ctx) {
 
 			add_render_callback(() => {
 				if (div_outro) div_outro.end(1);
-				if (!div_intro) div_intro = create_in_transition(div, fadeIn, {});
+				if (!div_intro) div_intro = create_in_transition(div, fadeIn, { animateTransform: true });
 				div_intro.start();
 			});
 
@@ -982,7 +1143,7 @@ function create_if_block_2(ctx) {
 		},
 		o(local) {
 			if (div_intro) div_intro.invalidate();
-			div_outro = create_out_transition(div, fadeOut, {});
+			div_outro = create_out_transition(div, fadeOut, { animateTransform: true });
 			current = false;
 		},
 		d(detaching) {
@@ -994,15 +1155,15 @@ function create_if_block_2(ctx) {
 	};
 }
 
-// (83:8) {#if typeof modalComponent === 'function'}
+// (90:8) {#if typeof modalComponent === 'function'}
 function create_if_block_1(ctx) {
 	let div1;
 	let div0;
 	let switch_instance;
 	let t;
 	let current;
-	const switch_instance_spread_levels = [/*modalProps*/ ctx[11]];
-	var switch_value = /*modalComponent*/ ctx[10];
+	const switch_instance_spread_levels = [/*modalProps*/ ctx[21]];
+	var switch_value = /*modalComponent*/ ctx[20];
 
 	function switch_props(ctx) {
 		let switch_instance_props = {};
@@ -1039,11 +1200,11 @@ function create_if_block_1(ctx) {
 			current = true;
 		},
 		p(ctx, dirty) {
-			const switch_instance_changes = (dirty & /*modalStack*/ 2)
-			? get_spread_update(switch_instance_spread_levels, [get_spread_object(/*modalProps*/ ctx[11])])
+			const switch_instance_changes = (dirty & /*modalStack*/ 4)
+			? get_spread_update(switch_instance_spread_levels, [get_spread_object(/*modalProps*/ ctx[21])])
 			: {};
 
-			if (switch_value !== (switch_value = /*modalComponent*/ ctx[10])) {
+			if (switch_value !== (switch_value = /*modalComponent*/ ctx[20])) {
 				if (switch_instance) {
 					group_outros();
 					const old_component = switch_instance;
@@ -1083,7 +1244,7 @@ function create_if_block_1(ctx) {
 	};
 }
 
-// (82:6) {#each modalStack as { modalComponent, modalProps, id }
+// (89:6) {#each modalStack as { modalComponent, modalProps, id }
 function create_each_block(key_1, ctx) {
 	let first;
 	let current_block_type_index;
@@ -1094,8 +1255,8 @@ function create_each_block(key_1, ctx) {
 	const if_blocks = [];
 
 	function select_block_type(ctx, dirty) {
-		if (typeof /*modalComponent*/ ctx[10] === "function") return 0;
-		if (typeof /*modalComponent*/ ctx[10] === "string") return 1;
+		if (typeof /*modalComponent*/ ctx[20] === "function") return 0;
+		if (typeof /*modalComponent*/ ctx[20] === "string") return 1;
 		return 2;
 	}
 
@@ -1162,10 +1323,10 @@ function create_each_block(key_1, ctx) {
 	};
 }
 
-function create_fragment$1(ctx) {
+function create_fragment$3(ctx) {
 	let if_block_anchor;
 	let current;
-	let if_block = /*visibleState*/ ctx[2] && create_if_block(ctx);
+	let if_block = /*visibleState*/ ctx[7] && create_if_block(ctx);
 
 	return {
 		c() {
@@ -1179,11 +1340,11 @@ function create_fragment$1(ctx) {
 			current = true;
 		},
 		p(ctx, [dirty]) {
-			if (/*visibleState*/ ctx[2]) {
+			if (/*visibleState*/ ctx[7]) {
 				if (if_block) {
 					if_block.p(ctx, dirty);
 
-					if (dirty & /*visibleState*/ 4) {
+					if (dirty & /*visibleState*/ 128) {
 						transition_in(if_block, 1);
 					}
 				} else {
@@ -1218,54 +1379,18 @@ function create_fragment$1(ctx) {
 	};
 }
 
-function fadeIn(node, { duration = 300 }) {
-	let didTick = false;
-
-	return {
-		duration,
-		tick: t => {
-			if (!didTick) {
-				didTick = true;
-				node.style.opacity = "0";
-				const initialTransform = node.style.transform;
-				node.style.transform = `translate3d(0, ${50}px, 0)`;
-
-				requestAnimationFrame(() => requestAnimationFrame(() => {
-					node.style.opacity = "1";
-					node.style.transform = initialTransform;
-				}));
-			}
-		}
-	};
-}
-
-function fadeOut(node, { duration = 300 }) {
-	let didTick = false;
-
-	return {
-		duration,
-		tick: t => {
-			if (!didTick) {
-				didTick = true;
-				node.classList.add("outro");
-				node.style.opacity = "0";
-				node.style.transform = `translate3d(0, ${200}px, 0)`;
-			}
-		}
-	};
-}
-
 function throwError(message) {
 	throw new Error(message);
 }
 
-function instance$1($$self, $$props, $$invalidate) {
+function instance$2($$self, $$props, $$invalidate) {
 	let visibleState;
 	let modalsCount;
 	let autoId = 1;
+	let { maxVisible = 4 } = $$props;
 
 	const showModal = options => {
-		$$invalidate(1, modalStack = [...modalStack, Object.assign(Object.assign({}, options), { id: autoId++ })]);
+		$$invalidate(2, modalStack = [...modalStack, Object.assign(Object.assign({}, options), { id: autoId++ })]);
 
 		const promise = new Promise((resolve, reject) => {
 				
@@ -1275,15 +1400,32 @@ function instance$1($$self, $$props, $$invalidate) {
 	};
 
 	const dismissLast = () => {
-		$$invalidate(1, modalStack = modalStack.slice(0, -1));
+		$$invalidate(2, modalStack = modalStack.slice(0, -1));
 	};
 
 	const dismissAll = () => {
-		$$invalidate(1, modalStack = []);
+		$$invalidate(2, modalStack = []);
 	};
 
 	let modalStack = [];
 	let lastVisibleState = false;
+	let backdropElement;
+	let modalStackElement;
+	let backdropHeight = 0;
+	let modalStackHeight = 0;
+	let backdropElementTransitions = false;
+
+	afterUpdate(() => {
+		if (backdropElement && modalStackElement) {
+			if (backdropHeight !== backdropElement.clientHeight) {
+				$$invalidate(5, backdropHeight = backdropElement.clientHeight);
+			}
+
+			if (modalStackHeight !== modalStackElement.clientHeight) {
+				$$invalidate(6, modalStackHeight = modalStackElement.clientHeight);
+			}
+		}
+	});
 
 	function handleKeyPress(event) {
 		console.log("handleKeyPress");
@@ -1299,18 +1441,46 @@ function instance$1($$self, $$props, $$invalidate) {
 		bubble($$self, event);
 	}
 
+	function div0_elementresize_handler() {
+		modalStackHeight = this.clientHeight;
+		$$invalidate(6, modalStackHeight);
+	}
+
+	function div0_binding($$value) {
+		binding_callbacks[$$value ? "unshift" : "push"](() => {
+			modalStackElement = $$value;
+			(((($$invalidate(4, modalStackElement), $$invalidate(3, backdropElement)), $$invalidate(5, backdropHeight)), $$invalidate(6, modalStackHeight)), $$invalidate(12, backdropElementTransitions));
+		});
+	}
+
+	function div1_elementresize_handler() {
+		backdropHeight = this.clientHeight;
+		$$invalidate(5, backdropHeight);
+	}
+
+	function div1_binding($$value) {
+		binding_callbacks[$$value ? "unshift" : "push"](() => {
+			backdropElement = $$value;
+			$$invalidate(3, backdropElement);
+		});
+	}
+
+	$$self.$$set = $$props => {
+		if ("maxVisible" in $$props) $$invalidate(0, maxVisible = $$props.maxVisible);
+	};
+
 	$$self.$$.update = () => {
-		if ($$self.$$.dirty & /*modalStack*/ 2) {
-			$$invalidate(2, visibleState = modalStack.length > 0);
+		if ($$self.$$.dirty & /*modalStack*/ 4) {
+			$$invalidate(7, visibleState = modalStack.length > 0);
 		}
 
-		if ($$self.$$.dirty & /*modalStack*/ 2) {
-			$$invalidate(3, modalsCount = modalStack.length);
+		if ($$self.$$.dirty & /*modalStack*/ 4) {
+			$$invalidate(8, modalsCount = modalStack.length);
 		}
 
-		if ($$self.$$.dirty & /*lastVisibleState, visibleState*/ 68) {
+		if ($$self.$$.dirty & /*lastVisibleState, visibleState*/ 2176) {
 			if (lastVisibleState !== visibleState) {
-				$$invalidate(6, lastVisibleState = visibleState);
+				$$invalidate(11, lastVisibleState = visibleState);
 
 				if (visibleState) {
 					document.body.style.overflow = "hidden";
@@ -1319,27 +1489,56 @@ function instance$1($$self, $$props, $$invalidate) {
 					document.body.style.overflow = "visible";
 					document.removeEventListener("keydown", handleKeyPress, true);
 				}
-			} // TODO: disable document.body scroll
-			// TODO: add ESC-key event listener
+			}
+		}
+
+		if ($$self.$$.dirty & /*backdropElement, modalStackElement, backdropHeight, modalStackHeight, backdropElementTransitions*/ 4216) {
+			if (backdropElement && modalStackElement) {
+				console.log({
+					backdropHeight,
+					modalStackHeight,
+					transform: `translateY(${(backdropHeight - modalStackHeight) / 2}px)`
+				});
+
+				$$invalidate(4, modalStackElement.style.transform = `translateY(${(backdropHeight - modalStackHeight) / 2}px)`, modalStackElement);
+
+				if (!backdropElementTransitions) {
+					$$invalidate(12, backdropElementTransitions = true);
+
+					requestAnimationFrame(() => requestAnimationFrame(() => {
+						$$invalidate(4, modalStackElement.style.transition = "transform 250ms ease-out", modalStackElement);
+					}));
+				}
+			}
 		}
 	};
 
 	return [
+		maxVisible,
 		dismissLast,
 		modalStack,
+		backdropElement,
+		modalStackElement,
+		backdropHeight,
+		modalStackHeight,
 		visibleState,
 		modalsCount,
 		showModal,
 		dismissAll,
 		lastVisibleState,
-		click_handler
+		backdropElementTransitions,
+		click_handler,
+		div0_elementresize_handler,
+		div0_binding,
+		div1_elementresize_handler,
+		div1_binding
 	];
 }
 
 class Smooth_modal_backdrop extends SvelteElement {
 	constructor(options) {
 		super();
-		this.shadowRoot.innerHTML = `<style>*{box-sizing:border-box}.smooth-modal-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;background-color:rgba(0, 0, 0, 0.6);z-index:10000}.modals-stack{position:relative;display:grid;grid-template-columns:1fr;grid-template-rows:1fr;max-width:80%;max-height:80%;transform-style:preserve-3d;perspective-origin:50% 50%;perspective:600px}.smooth-modal-transform-wrapper{grid-area:1/1/1/1;display:flex;flex-direction:column;flex-wrap:nowrap;justify-content:flex-start;align-items:center;transform-style:preserve-3d;perspective-origin:50% 50%;transition:transform 200ms ease-in, opacity 200ms ease-in}.smooth-modal-transform-wrapper.disabled{pointer-events:none}</style>`;
+		this.shadowRoot.innerHTML = `<style>*{box-sizing:border-box}.smooth-modal-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;background-color:rgba(0, 0, 0, 0.6);z-index:10000}.modal-stack{position:relative;display:grid;grid-template-columns:1fr;grid-template-rows:1fr;max-width:100%;max-height:90%;transform-style:preserve-3d;perspective-origin:50% 0;perspective:600px}@media(min-width: 480px){.modal-stack{max-width:80%;max-height:80%}}.smooth-modal-transform-wrapper{grid-area:1/1/1/1;display:flex;flex-direction:column;flex-wrap:nowrap;justify-content:flex-start;align-items:center;min-height:0;max-height:100%;transform-style:preserve-3d;perspective-origin:50% 0}.smooth-modal-transform-wrapper.disabled{pointer-events:none}.smooth-modal-transform-wrapper.hidden{display:none}</style>`;
 
 		init(
 			this,
@@ -1348,13 +1547,14 @@ class Smooth_modal_backdrop extends SvelteElement {
 				props: attribute_to_object(this.attributes),
 				customElement: true
 			},
-			instance$1,
-			create_fragment$1,
+			instance$2,
+			create_fragment$3,
 			safe_not_equal,
 			{
-				showModal: 4,
-				dismissLast: 0,
-				dismissAll: 5
+				maxVisible: 0,
+				showModal: 9,
+				dismissLast: 1,
+				dismissAll: 10
 			}
 		);
 
@@ -1371,76 +1571,306 @@ class Smooth_modal_backdrop extends SvelteElement {
 	}
 
 	static get observedAttributes() {
-		return ["showModal", "dismissLast", "dismissAll"];
+		return ["maxVisible", "showModal", "dismissLast", "dismissAll"];
 	}
 
-	get showModal() {
-		return this.$$.ctx[4];
-	}
-
-	get dismissLast() {
+	get maxVisible() {
 		return this.$$.ctx[0];
 	}
 
+	set maxVisible(maxVisible) {
+		this.$set({ maxVisible });
+		flush();
+	}
+
+	get showModal() {
+		return this.$$.ctx[9];
+	}
+
+	get dismissLast() {
+		return this.$$.ctx[1];
+	}
+
 	get dismissAll() {
-		return this.$$.ctx[5];
+		return this.$$.ctx[10];
 	}
 }
 
 customElements.define("smooth-modal-backdrop", Smooth_modal_backdrop);
 
-/* src/components/smooth-modal.svelte generated by Svelte v3.37.0 */
+/* src/components/smooth-modal-window.svelte generated by Svelte v3.37.0 */
 
-function create_fragment(ctx) {
-	let div;
-	let t;
+function create_fragment$2(ctx) {
+	let div3;
+	let h1;
+	let t0_value = (/*title*/ ctx[0] || "") + "";
+	let t0;
+	let t1;
+	let div1;
+	let input;
+	let t2;
+	let div0;
+	let t3_value = (/*message*/ ctx[1] || "") + "";
+	let t3;
+	let t4;
+	let div2;
+	let slot;
+	let smooth_modal_footer;
+	let smooth_modal_footer_button;
+	let t5;
 	let mounted;
 	let dispose;
 
 	return {
 		c() {
-			div = element("div");
-			t = text(/*message*/ ctx[0]);
+			div3 = element("div");
+			h1 = element("h1");
+			t0 = text(t0_value);
+			t1 = space();
+			div1 = element("div");
+			input = element("input");
+			t2 = space();
+			div0 = element("div");
+			t3 = text(t3_value);
+			t4 = space();
+			div2 = element("div");
+			slot = element("slot");
+			smooth_modal_footer = element("smooth-modal-footer");
+			smooth_modal_footer_button = element("smooth-modal-footer-button");
+			t5 = text(/*ok_button_label*/ ctx[2]);
 			this.c = noop;
-			attr(div, "class", "smooth-modal");
+			attr(h1, "class", "header");
+			input.value = "try focus";
+			attr(div1, "class", "body");
+			attr(slot, "name", "footer");
+			attr(div2, "class", "footer");
+			attr(div3, "class", "smooth-modal");
 		},
 		m(target, anchor) {
-			insert(target, div, anchor);
-			append(div, t);
+			insert(target, div3, anchor);
+			append(div3, h1);
+			append(h1, t0);
+			append(div3, t1);
+			append(div3, div1);
+			append(div1, input);
+			append(div1, t2);
+			append(div1, div0);
+			append(div0, t3);
+			append(div3, t4);
+			append(div3, div2);
+			append(div2, slot);
+			append(slot, smooth_modal_footer);
+			append(smooth_modal_footer, smooth_modal_footer_button);
+			append(smooth_modal_footer_button, t5);
 
 			if (!mounted) {
-				dispose = listen(div, "click", /*click_handler*/ ctx[1]);
+				dispose = listen(div3, "click", /*click_handler*/ ctx[4]);
 				mounted = true;
 			}
 		},
 		p(ctx, [dirty]) {
-			if (dirty & /*message*/ 1) set_data(t, /*message*/ ctx[0]);
+			if (dirty & /*title*/ 1 && t0_value !== (t0_value = (/*title*/ ctx[0] || "") + "")) set_data(t0, t0_value);
+			if (dirty & /*message*/ 2 && t3_value !== (t3_value = (/*message*/ ctx[1] || "") + "")) set_data(t3, t3_value);
+			if (dirty & /*ok_button_label*/ 4) set_data(t5, /*ok_button_label*/ ctx[2]);
 		},
 		i: noop,
 		o: noop,
 		d(detaching) {
-			if (detaching) detach(div);
+			if (detaching) detach(div3);
 			mounted = false;
 			dispose();
 		}
 	};
 }
 
-function instance($$self, $$props, $$invalidate) {
+function instance$1($$self, $$props, $$invalidate) {
+	let { title = null } = $$props;
 	let { message = "no message" } = $$props;
-	const click_handler = () => SmoothModal.alert(Math.round(Math.random() * 1000));
+	let { ok_button_label = "OK" } = $$props;
+	let { onDismiss = null } = $$props;
+
+	function click_handler(event) {
+		bubble($$self, event);
+	}
 
 	$$self.$$set = $$props => {
-		if ("message" in $$props) $$invalidate(0, message = $$props.message);
+		if ("title" in $$props) $$invalidate(0, title = $$props.title);
+		if ("message" in $$props) $$invalidate(1, message = $$props.message);
+		if ("ok_button_label" in $$props) $$invalidate(2, ok_button_label = $$props.ok_button_label);
+		if ("onDismiss" in $$props) $$invalidate(3, onDismiss = $$props.onDismiss);
 	};
 
-	return [message, click_handler];
+	return [title, message, ok_button_label, onDismiss, click_handler];
 }
 
-class Smooth_modal extends SvelteElement {
+class Smooth_modal_window extends SvelteElement {
 	constructor(options) {
 		super();
-		this.shadowRoot.innerHTML = `<style>*{box-sizing:border-box}.smooth-modal{padding:100px;background-color:white;filter:drop-shadow(0 0 10px rgba(0, 0, 0, 0.2))}</style>`;
+		this.shadowRoot.innerHTML = `<style>*{box-sizing:border-box}.smooth-modal{display:flex;flex-direction:column;flex-wrap:nowrap;max-height:100%;overflow-y:auto;background-color:white;filter:drop-shadow(0 0 10px rgba(0, 0, 0, 0.2))}.smooth-modal>*{overflow-y:auto}.header{position:sticky;top:0;z-index:1;flex:0 0 auto;margin:0;padding:20px 20px 20px;text-align:center;font-size:1.2;font-weight:500}.header,.footer{background-color:rgba(255, 255, 255, 0.95)}.body{flex:1 0 auto;padding:10px 100px 50px;min-height:0;text-align:center}.footer{position:sticky;bottom:0;z-index:1;flex:0 0 auto;overflow:auto;border-top:1px solid #e0e0e0}</style>`;
+
+		init(
+			this,
+			{
+				target: this.shadowRoot,
+				props: attribute_to_object(this.attributes),
+				customElement: true
+			},
+			instance$1,
+			create_fragment$2,
+			safe_not_equal,
+			{
+				title: 0,
+				message: 1,
+				ok_button_label: 2,
+				onDismiss: 3
+			}
+		);
+
+		if (options) {
+			if (options.target) {
+				insert(options.target, this, options.anchor);
+			}
+
+			if (options.props) {
+				this.$set(options.props);
+				flush();
+			}
+		}
+	}
+
+	static get observedAttributes() {
+		return ["title", "message", "ok_button_label", "onDismiss"];
+	}
+
+	get title() {
+		return this.$$.ctx[0];
+	}
+
+	set title(title) {
+		this.$set({ title });
+		flush();
+	}
+
+	get message() {
+		return this.$$.ctx[1];
+	}
+
+	set message(message) {
+		this.$set({ message });
+		flush();
+	}
+
+	get ok_button_label() {
+		return this.$$.ctx[2];
+	}
+
+	set ok_button_label(ok_button_label) {
+		this.$set({ ok_button_label });
+		flush();
+	}
+
+	get onDismiss() {
+		return this.$$.ctx[3];
+	}
+
+	set onDismiss(onDismiss) {
+		this.$set({ onDismiss });
+		flush();
+	}
+}
+
+customElements.define("smooth-modal-window", Smooth_modal_window);
+
+/* src/components/smooth-modal-footer.svelte generated by Svelte v3.37.0 */
+
+function create_fragment$1(ctx) {
+	let div;
+
+	return {
+		c() {
+			div = element("div");
+			div.innerHTML = `<smooth-modal-footer-button>OK</smooth-modal-footer-button>`;
+			this.c = noop;
+			attr(div, "class", "footer");
+		},
+		m(target, anchor) {
+			insert(target, div, anchor);
+		},
+		p: noop,
+		i: noop,
+		o: noop,
+		d(detaching) {
+			if (detaching) detach(div);
+		}
+	};
+}
+
+class Smooth_modal_footer extends SvelteElement {
+	constructor(options) {
+		super();
+		this.shadowRoot.innerHTML = `<style>*{box-sizing:border-box}.footer{display:flex;justify-content:stretch;align-items:stretch}smooth-modal-footer-button{flex:1 1 auto;background-color:transparent}smooth-modal-footer-button:hover{background-color:white}</style>`;
+
+		init(
+			this,
+			{
+				target: this.shadowRoot,
+				props: attribute_to_object(this.attributes),
+				customElement: true
+			},
+			null,
+			create_fragment$1,
+			safe_not_equal,
+			{}
+		);
+
+		if (options) {
+			if (options.target) {
+				insert(options.target, this, options.anchor);
+			}
+		}
+	}
+}
+
+customElements.define("smooth-modal-footer", Smooth_modal_footer);
+
+/* src/components/smooth-modal-footer-button.svelte generated by Svelte v3.37.0 */
+
+function create_fragment(ctx) {
+	let div;
+
+	return {
+		c() {
+			div = element("div");
+			div.innerHTML = `<slot></slot>`;
+			this.c = noop;
+			attr(div, "tab-index", "0");
+		},
+		m(target, anchor) {
+			insert(target, div, anchor);
+		},
+		p: noop,
+		i: noop,
+		o: noop,
+		d(detaching) {
+			if (detaching) detach(div);
+		}
+	};
+}
+
+function instance($$self, $$props, $$invalidate) {
+	let { default: isDefault = false } = $$props;
+
+	$$self.$$set = $$props => {
+		if ("default" in $$props) $$invalidate(0, isDefault = $$props.default);
+	};
+
+	return [isDefault];
+}
+
+class Smooth_modal_footer_button extends SvelteElement {
+	constructor(options) {
+		super();
+		this.shadowRoot.innerHTML = `<style>*{box-sizing:border-box}div{flex:1 1 auto;display:block;padding:1.2em 2ch;text-align:center}</style>`;
 
 		init(
 			this,
@@ -1452,7 +1882,7 @@ class Smooth_modal extends SvelteElement {
 			instance,
 			create_fragment,
 			safe_not_equal,
-			{ message: 0 }
+			{ default: 0 }
 		);
 
 		if (options) {
@@ -1468,19 +1898,19 @@ class Smooth_modal extends SvelteElement {
 	}
 
 	static get observedAttributes() {
-		return ["message"];
+		return ["default"];
 	}
 
-	get message() {
+	get default() {
 		return this.$$.ctx[0];
 	}
 
-	set message(message) {
-		this.$set({ message });
+	set default(isDefault) {
+		this.$set({ default: isDefault });
 		flush();
 	}
 }
 
-customElements.define("smooth-modal", Smooth_modal);
+customElements.define("smooth-modal-footer-button", Smooth_modal_footer_button);
 
-export { SmoothModal, insertCustomElement };
+export { SmoothModal, fadeIn, fadeOut, insertCustomElement, trapFocus };
