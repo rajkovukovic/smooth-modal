@@ -15,7 +15,7 @@ class SmoothModalClass {
 
   public alert(modalProps: Record<string, any>): Promise<boolean> {
     return this._backdropInstance.showModal({
-      modalComponent: "smooth-modal-window",
+      modalComponent: "smooth-modal-alert",
       modalProps,
     } as SmoothModalOptions);
   }

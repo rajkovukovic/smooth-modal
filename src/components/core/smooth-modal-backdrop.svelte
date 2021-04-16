@@ -122,24 +122,28 @@
             class="smooth-modal-transform-wrapper"
             class:disabled={index < modalsCount - 1}
             class:hidden={modalsCount - index >= maxVisible + 1}
-            on:click|stopPropagation
             in:fadeIn={{ animateTransform: true }}
             out:fadeOut={{ animateTransform: true }}
             style="
-              transform: translate3d(0, {-50 *
+              transform: translate3d(0, {-20 *
               (modalsCount - index - 1)}px, {-200 *
               (modalsCount - index - 1)}px);
               filter: {index <
             modalsCount - 1
               ? 'brightness(50%)'
               : 'brightness(100%)'};"
-            use:insertCustomElement={{
-              tagName: modalComponent,
-              props: modalProps,
-              events: null,
-            }}
-            use:trapFocus={index === modalsCount - 1}
-          />
+          >
+            <div
+              class="smooth-modal-wrapper"
+              on:click|stopPropagation
+              use:insertCustomElement={{
+                tagName: modalComponent,
+                props: modalProps,
+                events: null,
+              }}
+              use:trapFocus={index === modalsCount - 1}
+            />
+          </div>
         {:else}
           {throwError(
             `modalComponent must be of type "SvelteComponent" or "string", got "${typeof modalComponent}" instead.`
@@ -193,7 +197,7 @@
     justify-content: flex-start;
     align-items: center;
     min-height: 0;
-    max-height: 100%;
+    max-height: fit-content;
     &.disabled {
       pointer-events: none;
     }
@@ -202,5 +206,13 @@
     &.hidden {
       display: none;
     }
+  }
+
+  .smooth-modal-wrapper {
+    width: fit-content;
+    height: fit-content;
+    max-width: 100%;
+    max-height: 100%;
+    user-select: none;
   }
 </style>

@@ -2,15 +2,18 @@
   "compilerOptions": {
     "target": "es6",
     "baseUrl": "./",
+    "declaration": true,
+    "declarationDir": "./@types",
     "importsNotUsedAsValues": "preserve",
     "lib": ["DOM", "esnext"],
     "moduleResolution": "node",
     "paths": {
       "@smooth-modal": ["./src/index.ts"]
-    }
+    },
+    "plugins": [
+      { "transform": "typescript-transform-paths" },
+      { "transform": "typescript-transform-paths", "afterDeclarations": true }
+    ],
   },
-  "include": [
-    //"docs-src/**/*",
-    "src",
-  ]
+  "include": ["src"]
 }

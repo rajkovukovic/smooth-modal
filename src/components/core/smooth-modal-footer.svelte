@@ -4,9 +4,7 @@
 </script>
 
 <div class="footer">
-  <smooth-modal-footer-button>
-    OK
-  </smooth-modal-footer-button>
+  <slot />
 </div>
 
 <style type="text/scss">
@@ -18,13 +16,5 @@
     display: flex;
     justify-content: stretch;
     align-items: stretch;
-  }
-
-  smooth-modal-footer-button {
-    flex: 1 1 auto;
-    background-color: transparent;
-    &:hover {
-      background-color: white;
-    }
   }
 </style>

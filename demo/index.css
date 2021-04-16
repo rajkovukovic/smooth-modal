@@ -17,7 +17,7 @@ body {
   --primary-color: rgb(250, 200, 100);
   --primary-color-accent: rgb(255, 199, 88);
   --primary-color-tint: rgb(252, 221, 158);
-  --primary-color-contrast: var(--background);
+  --primary-color-contrast: rgb(144, 96, 0);
   --secondary-color: rgb(102, 155, 70);
   --secondary-color-lighten: rgb(121, 172, 89);
   --secondary-color-contrast: var(--background);

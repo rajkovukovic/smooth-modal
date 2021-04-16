@@ -14,9 +14,10 @@ let counter = 1;
 const showOneMoreModal = (canHaveSufix = false) => {
   const sufix = canHaveSufix && Math.random() < 0.5 ? lorem : "";
   SmoothModal.alert({
+    ok_button_label: "OK",
     message: Math.round(Math.random() * 1000) + sufix,
     title: "Alert " + counter++,
-    onDismiss: handleModalResponse,
+    onAction: handleModalResponse,
   });
 }
 
