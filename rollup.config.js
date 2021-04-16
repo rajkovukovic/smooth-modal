@@ -3,7 +3,6 @@ import commonjs from "@rollup/plugin-commonjs";
 import resolve from "@rollup/plugin-node-resolve";
 import serve from "rollup-plugin-serve";
 import rollupTypescript from "@rollup/plugin-typescript";
-import typescript2 from "rollup-plugin-typescript2";
 import typescriptCompiler from "typescript";
 import { terser } from "rollup-plugin-terser";
 import livereload from "rollup-plugin-livereload";
@@ -34,7 +33,7 @@ const plugins = (typescriptPlugin) => [
     port: 3000,
   }),
   IS_DEV_MODE && livereload({ watch: "./demo" }),
-  // !IS_DEV_MODE && terser(),
+  !IS_DEV_MODE && terser(),
 ];
 
 const webComponentPackages = [
@@ -46,6 +45,7 @@ const webComponentPackages = [
 
 const buildConfigs = webComponentPackages.map((webComponentPackage) => {
   const output = [
+    // demo/lib - used for development
     {
       file: `demo/lib/${webComponentPackage.output}.js`,
       format: "esm",
@@ -53,20 +53,20 @@ const buildConfigs = webComponentPackages.map((webComponentPackage) => {
       exports: "named",
       sourcemap: true,
     },
+    // esm build
+    {
+      file: `dist/index.mjs`,
+      format: "esm",
+      exports: "named",
+      sourcemap: true,
+    },
+    // cjs build
+    {
+      file: `dist/index.js`,
+      format: "cjs",
+      sourcemap: true,
+    },
   ];
-
-  output.push({
-    file: `dist/index.mjs`,
-    format: "esm",
-    exports: "named",
-    sourcemap: true,
-  });
-
-  output.push({
-    file: `dist/index.js`,
-    format: "cjs",
-    sourcemap: true,
-  });
 
   return {
     input: webComponentPackage.input,

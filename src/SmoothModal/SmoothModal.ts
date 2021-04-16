@@ -13,7 +13,7 @@ class SmoothModalClass {
     return this._rootElement;
   }
 
-  public alert(modalProps: Record<string, any>): Promise<boolean> {
+  public alert(modalProps: Record<string, any>) {
     return this._backdropInstance.showModal({
       modalComponent: "smooth-modal-alert",
       modalProps,
@@ -22,13 +22,17 @@ class SmoothModalClass {
     });
   }
 
-  public confirm(modalProps: Record<string, any>): Promise<boolean> {
+  public confirm(modalProps: Record<string, any>) {
     return this._backdropInstance.showModal({
       modalComponent: "smooth-modal-confirm",
       modalProps,
       canDismissOnEnterKey: true,
       canDismissOnEscapeKey: true,
     });
+  }
+
+  public showModal(options: SmoothModalOptions) {
+    return this._backdropInstance.showModal(options);
   }
 
   public dismissLast(): void {

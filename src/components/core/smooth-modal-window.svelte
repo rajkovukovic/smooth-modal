@@ -1,7 +1,7 @@
 <svelte:options tag="smooth-modal-window" />
 
 <script lang="ts">
-  import { dispatchModalAction } from '@smooth-modal';
+  // import { dispatchModalAction } from '@smooth-modal';
 
   let rootElement;
 

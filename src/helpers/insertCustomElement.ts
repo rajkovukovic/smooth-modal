@@ -1,11 +1,15 @@
-type AddEventListenerArgs = [string, EventListenerOrEventListenerObject, boolean | EventListenerOptions] | [string, EventListenerOrEventListenerObject];
+export type AddEventListenerArgs = [string, EventListenerOrEventListenerObject, boolean | EventListenerOptions] | [string, EventListenerOrEventListenerObject];
 
-type Events = Record<string, EventListenerOrEventListenerObject> | AddEventListenerArgs[];
+export type AddEventListenerArgsList = Record<string, EventListenerOrEventListenerObject> | AddEventListenerArgs[];
 
-interface InsertCustomElementArgs {
-  tagName: string;
+export interface InsertDynamicComponentArgs {
+  tagName: string | Function;
   props: Record<string, any>;
-  events: Events;
+  events: AddEventListenerArgsList;
+}
+
+export interface InsertCustomElementArgs extends InsertDynamicComponentArgs {
+  tagName: string;
 }
 
 export function insertCustomElement(
@@ -19,7 +23,7 @@ export function insertCustomElement(
   let child: HTMLElement;
   let lastTagName: string;
   let lastProps: Record<string, any>;
-  let lastEvents: Events;
+  let lastEvents: AddEventListenerArgsList;
   let lastNormalizedEvents: AddEventListenerArgs[];
 
   const setProps = (child: HTMLElement, props: Record<string, any>) => {

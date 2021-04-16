@@ -4,7 +4,7 @@
   import {
     fadeIn,
     fadeOut,
-    insertCustomElement,
+    insertDynamicComponent,
     InternalSmoothModalOptions,
     SmoothModalOptions,
     trapFocus,
@@ -16,19 +16,21 @@
   export let maxVisible = 4;
 
   const removeModalById = (id: number) => {
-    const index = modalStack.findIndex((modalOptions => modalOptions.id === id));
+    const index = modalStack.findIndex(
+      (modalOptions) => modalOptions.id === id
+    );
     if (index >= 0) {
       modalStack.splice(index, 1);
       modalStack = modalStack;
     }
-  }
+  };
 
   export const showModal = (options: SmoothModalOptions) => {
     const id = autoId++;
     modalStack = [...modalStack, { ...options, id }];
     return {
       destroy: () => removeModalById(id),
-    }
+    };
   };
 
   export const dismissLast = () => {
@@ -151,13 +153,7 @@
       class="modal-stack"
     >
       {#each modalStack as { modalComponent, modalProps, id }, index (id)}
-        {#if typeof modalComponent === 'function'}
-          <div class="smooth-modal-wrapper">
-            <div class="smooth-modal-transform-wrapper">
-              <svelte:component this={modalComponent} {...modalProps} />
-            </div>
-          </div>
-        {:else if typeof modalComponent === 'string'}
+        {#if typeof modalComponent === 'function' || typeof modalComponent === 'string'}
           <div
             class="smooth-modal-transform-wrapper"
             class:disabled={index < modalsCount - 1}
@@ -177,7 +173,7 @@
               class="smooth-modal-wrapper"
               on:action={tryDismissLast}
               on:click|stopPropagation
-              use:insertCustomElement={{
+              use:insertDynamicComponent={{
                 tagName: modalComponent,
                 props: modalProps,
                 events: null,

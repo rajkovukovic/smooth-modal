@@ -1,30 +1,48 @@
 <script lang="ts">
-	export let name: string;
+  import { SmoothModal } from '../../lib/smooth-modal.js';
+  import CustomModal from './components/CustomModal.svelte';
+
+  let actionHistory = [];
+
+  function addAction(action: string) {
+    actionHistory.push(action);
+    actionHistory = actionHistory;
+  }
+
+  function showModals() {
+    SmoothModal.alert({
+      message: 'Alert modal message',
+      ok_button_label: 'YES',
+      title: 'Hello',
+      onResponse: ({ action }) => addAction(`AlertModal: ${action}`),
+    });
+
+    SmoothModal.showModal({
+      modalComponent: CustomModal,
+      modalProps: {
+        message: 'Custom modal message',
+        title: 'Custom modal title',
+        onResponse: ({ action }) => addAction(`CustomModal: ${action}`),
+      },
+      canDismissOnEnterKey: false,
+      canDismissOnEscapeKey: true,
+    });
+  }
+
+  showModals();
 </script>
 
-<main>
-	<h1>Hello {name}!</h1>
-	<p>Visit the <a href="https://svelte.dev/tutorial">Svelte tutorial</a> to learn how to build Svelte apps.</p>
+<main on:click={showModals}>
+  <ul>
+    {#each actionHistory as action}
+      <li>{action}</li>
+    {/each}
+  </ul>
 </main>
 
 <style>
-	main {
-		text-align: center;
-		padding: 1em;
-		max-width: 240px;
-		margin: 0 auto;
-	}
-
-	h1 {
-		color: #ff3e00;
-		text-transform: uppercase;
-		font-size: 4em;
-		font-weight: 100;
-	}
-
-	@media (min-width: 640px) {
-		main {
-			max-width: none;
-		}
-	}
+  main {
+    min-width: 100vw;
+    min-height: 100vh;
+  }
 </style>
