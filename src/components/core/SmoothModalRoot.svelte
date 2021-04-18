@@ -1,15 +1,12 @@
-<svelte:options tag="smooth-modal-backdrop" />
-
 <script lang="ts">
   import {
     fadeIn,
     fadeOut,
-    insertDynamicComponent,
     InternalSmoothModalOptions,
-    SmoothModalOptions,
+    insertDynamicComponent,
     trapFocus,
+    SmoothModalOptions,
   } from '@smooth-modal';
-  import { afterUpdate } from 'svelte';
 
   let autoId = 1;
 
@@ -92,38 +89,6 @@
     }
   }
 
-  let backdropElement: HTMLDivElement;
-  let modalStackElement: HTMLDivElement;
-  let backdropHeight = 0;
-  let modalStackHeight = 0;
-  let backdropElementTransitions = false;
-
-  afterUpdate(() => {
-    if (backdropElement && modalStackElement) {
-      if (backdropHeight !== backdropElement.clientHeight) {
-        backdropHeight = backdropElement.clientHeight;
-      }
-      if (modalStackHeight !== modalStackElement.clientHeight) {
-        modalStackHeight = modalStackElement.clientHeight;
-      }
-    }
-  });
-
-  $: if (backdropElement && modalStackElement) {
-    modalStackElement.style.transform = `translateY(${
-      (backdropHeight - modalStackHeight) / 2
-    }px)`;
-
-    if (!backdropElementTransitions) {
-      backdropElementTransitions = true;
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          modalStackElement.style.transition = 'transform 250ms ease-out';
-        })
-      );
-    }
-  }
-
   function handleKeyDown(event: KeyboardEvent) {
     if (event.key === 'Escape' || event.key === 'Enter') {
       if (tryDismissLast(event.key)) {
@@ -139,40 +104,48 @@
 </script>
 
 {#if visibleState}
-  <div
-    bind:clientHeight={backdropHeight}
-    bind:this={backdropElement}
-    class="smooth-modal-backdrop"
-    in:fadeIn
-    out:fadeOut
-    on:click|stopPropagation={() => tryDismissLast('backdrop')}
-  >
-    <div
-      bind:clientHeight={modalStackHeight}
-      bind:this={modalStackElement}
-      class="modal-stack"
-    >
-      {#each modalStack as { modalComponent, modalProps, id }, index (id)}
+  <smooth-modal-backdrop>
+    {#each modalStack as { modalComponent, modalProps, id }, index (id)}
+      {#if modalsCount - index < maxVisible + 1}
         {#if typeof modalComponent === 'function' || typeof modalComponent === 'string'}
           <div
+            slot="modal-stack"
             class="smooth-modal-transform-wrapper"
-            class:disabled={index < modalsCount - 1}
-            class:hidden={modalsCount - index >= maxVisible + 1}
-            in:fadeIn={{ animateTransform: true }}
-            out:fadeOut={{ animateTransform: true }}
             style="
-              transform: translate3d(0, {-20 *
+                grid-area: 1 / 1 / 1 / 1;
+                display: flex;
+                flex-direction: column;
+                flex-wrap: nowrap;
+                justify-content: flex-start;
+                align-items: center;
+                min-height: 0;
+                max-height: fit-content;
+                transform-style: preserve-3d;
+                perspective-origin: 50% 0;
+                pointer-events: {index <
+            modalsCount - 1
+              ? 'none'
+              : 'auto'};
+                transform: translate3d(0, {-20 *
               (modalsCount - index - 1)}px, {-200 *
               (modalsCount - index - 1)}px);
-              filter: {index <
+                filter: {index <
             modalsCount - 1
               ? 'brightness(50%)'
               : 'brightness(100%)'};"
+            in:fadeIn={{ animateTransform: true }}
+            out:fadeOut={{ animateTransform: true }}
           >
             <div
               class="smooth-modal-wrapper"
               on:action={tryDismissLast}
               on:click|stopPropagation
+              style="
+                  width: fit-content;
+                  height: fit-content;
+                  max-width: 100%;
+                  max-height: 100%;
+                  user-select: none;"
               use:insertDynamicComponent={{
                 tagName: modalComponent,
                 props: modalProps,
@@ -186,70 +159,7 @@
             `modalComponent must be of type "SvelteComponent" or "string", got "${typeof modalComponent}" instead.`
           )}
         {/if}
-      {/each}
-    </div>
-  </div>
+      {/if}
+    {/each}
+  </smooth-modal-backdrop>
 {/if}
-
-<style type="text/scss">
-  * {
-    box-sizing: border-box;
-  }
-
-  .smooth-modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: center;
-    background-color: rgba(0, 0, 0, 0.6);
-    z-index: 10000;
-  }
-
-  .modal-stack {
-    position: relative;
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-    max-width: 100%;
-    max-height: 90%;
-    transform-style: preserve-3d;
-    perspective-origin: 50% 0;
-    perspective: 600px;
-    @media (min-width: 480px) {
-      max-width: 80%;
-      max-height: 80%;
-    }
-  }
-
-  .smooth-modal-transform-wrapper {
-    grid-area: 1 / 1 / 1 / 1;
-    display: flex;
-    flex-direction: column;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    align-items: center;
-    min-height: 0;
-    max-height: fit-content;
-    &.disabled {
-      pointer-events: none;
-    }
-    transform-style: preserve-3d;
-    perspective-origin: 50% 0;
-    &.hidden {
-      display: none;
-    }
-  }
-
-  .smooth-modal-wrapper {
-    width: fit-content;
-    height: fit-content;
-    max-width: 100%;
-    max-height: 100%;
-    user-select: none;
-  }
-</style>

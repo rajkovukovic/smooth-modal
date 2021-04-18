@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "rm -rf ./dist && rm -rf ./docs/lib && NODE_ENV=development rollup --config --watch & npm run dev:svelte-demo",
     "build": "rm -rf ./dist && rm -rf ./docs/lib && NODE_ENV=production rollup --config && npm run build:svelte-demo",
+    "dev-html-only": "rm -rf ./dist && rm -rf ./docs/lib && NODE_ENV=development rollup --config --watch",
     "dev:svelte-demo": "rm -rf ./demo/svelte/public.build && cd ./demo/svelte && rollup --config --watch",
     "build:svelte-demo": "rm -rf ./demo/svelte/public.build && cd ./demo/svelte && rollup --config"
   },

@@ -7,20 +7,29 @@ import typescriptCompiler from "typescript";
 import { terser } from "rollup-plugin-terser";
 import livereload from "rollup-plugin-livereload";
 import sveltePreprocessor from "svelte-preprocess";
+// import css from "rollup-plugin-css-only";
 
 import { preprocessOptions } from "./svelte.config";
 
 const IS_DEV_MODE = process.env.ROLLUP_WATCH;
 
+const svelteDefaults = {
+  // compilerOptions: {
+  //   ...preprocessOptions,
+  // },
+  preprocess: sveltePreprocessor(),
+}
+
 const plugins = (typescriptPlugin) => [
-  svelte({
-    compilerOptions: {
-      ...preprocessOptions,
-    },
-    extensions: [".svelte"],
-    preprocess: sveltePreprocessor(),
-    emitCss: true,
-  }),
+  // svelte({
+  //   compilerOptions: {
+  //     ...preprocessOptions,
+  //   },
+  //   extensions: [".svelte"],
+  //   preprocess: sveltePreprocessor(),
+  // }),
+  svelte({ ...svelteDefaults, compilerOptions: { customElement: true } , include: /\.wc\.svelte$/ }),
+  svelte({ ...svelteDefaults, compilerOptions: { customElement: false }, exclude: /\.wc\.svelte$/ }),
   typescriptPlugin({
     typescript: typescriptCompiler,
     tsconfig: "./tsconfig.json",
@@ -51,20 +60,20 @@ const buildConfigs = webComponentPackages.map((webComponentPackage) => {
       format: "esm",
       name: webComponentPackage.output.split("-").join(""),
       exports: "named",
-      sourcemap: true,
+      sourcemap: false,
     },
     // esm build
     {
       file: `dist/index.mjs`,
       format: "esm",
       exports: "named",
-      sourcemap: true,
+      sourcemap: false,
     },
     // cjs build
     {
       file: `dist/index.js`,
       format: "cjs",
-      sourcemap: true,
+      sourcemap: false,
     },
   ];
 

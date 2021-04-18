@@ -27,6 +27,13 @@
       canDismissOnEnterKey: false,
       canDismissOnEscapeKey: true,
     });
+
+    SmoothModal.confirm({
+      ok_button_label: 'I accept',
+      cancel_button_label: 'No',
+      message: 'Do you accept our nasty Terms & Conditions?',
+      title: 'Please accept this',
+    });
   }
 
   showModals();

@@ -1,20 +1,24 @@
-import { SmoothModalOptions } from "@smooth-modal";
+import { SvelteComponentDev } from "svelte/internal";
+import { SmoothModalOptions, SmoothModalRoot } from "@smooth-modal";
 
 class SmoothModalClass {
-  protected _rootElement: HTMLElement = document.body;
-  protected _backdropInstance: any;
+  protected _rootDomElement: HTMLElement = document.body;
+  protected _modalRoot: SvelteComponentDev;
 
   constructor() {
-    this._backdropInstance = document.createElement('smooth-modal-backdrop') as any;
-    this._rootElement.appendChild(this._backdropInstance);
+    console.log({ SmoothModalRoot });
+    this._modalRoot = new SmoothModalRoot({
+      target: this._rootDomElement,
+      props: {},
+    });
   }
 
   get rootElement(): HTMLElement {
-    return this._rootElement;
+    return this._rootDomElement;
   }
 
   public alert(modalProps: Record<string, any>) {
-    return this._backdropInstance.showModal({
+    return this._modalRoot.showModal({
       modalComponent: "smooth-modal-alert",
       modalProps,
       canDismissOnEnterKey: true,
@@ -23,7 +27,7 @@ class SmoothModalClass {
   }
 
   public confirm(modalProps: Record<string, any>) {
-    return this._backdropInstance.showModal({
+    return this._modalRoot.showModal({
       modalComponent: "smooth-modal-confirm",
       modalProps,
       canDismissOnEnterKey: true,
@@ -32,11 +36,11 @@ class SmoothModalClass {
   }
 
   public showModal(options: SmoothModalOptions) {
-    return this._backdropInstance.showModal(options);
+    return this._modalRoot.showModal(options);
   }
 
   public dismissLast(): void {
-    return this._backdropInstance.dismissLast();
+    return this._modalRoot.dismissLast();
   }
 }
 
