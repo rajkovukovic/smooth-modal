@@ -5,13 +5,14 @@
     fadeIn,
     fadeOut,
     InternalSmoothModalOptions,
-    slotNameFromId,
     SmoothModalOptions,
   } from '@smooth-modal';
   import { afterUpdate } from 'svelte';
 
   let autoId = 1;
 
+  export const editable = true;
+  export const focusable = true;
   export let maxVisible = 4;
 
   const removeModalById = (id: number) => {

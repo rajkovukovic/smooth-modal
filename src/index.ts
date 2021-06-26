@@ -4,7 +4,6 @@ export * from "./helpers/dispatchModalAction";
 export * from "./helpers/trapFocus";
 export * from "./helpers/insertCustomElement";
 export * from "./helpers/insertDynamicComponent";
-export * from "./helpers/slotNameFromId";
 
 // base web-components
 import "./components/core/smooth-modal-backdrop.wc.svelte";

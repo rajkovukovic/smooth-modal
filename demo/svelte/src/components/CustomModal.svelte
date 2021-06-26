@@ -62,9 +62,6 @@
     --border-radius: 10px;
   }
 
-  .header {
-  }
-
   .body {
     padding: 30px 30px 50px;
     min-height: 0;

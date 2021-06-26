@@ -1,13 +1,14 @@
 <svelte:options tag="smooth-modal-button" />
 
 <script lang="ts">
-  let isDefaultProp = false;
+  let isDefaultProp: "" | boolean = false;
   export { isDefaultProp as default };
+  export let disabled = false;
 
   $: isDefault = isDefaultProp || isDefaultProp === "";
 </script>
 
-<button class:default={isDefault}>
+<button class:default={isDefault} {disabled}>
   <slot />
 </button>
 

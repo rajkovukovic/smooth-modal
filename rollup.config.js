@@ -60,20 +60,20 @@ const buildConfigs = webComponentPackages.map((webComponentPackage) => {
       format: "esm",
       name: webComponentPackage.output.split("-").join(""),
       exports: "named",
-      sourcemap: false,
+      sourcemap: true,
     },
     // esm build
     {
       file: `dist/index.mjs`,
       format: "esm",
       exports: "named",
-      sourcemap: false,
+      sourcemap: true,
     },
     // cjs build
     {
       file: `dist/index.js`,
       format: "cjs",
-      sourcemap: false,
+      sourcemap: true,
     },
   ];
 

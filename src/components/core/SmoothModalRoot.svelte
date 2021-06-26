@@ -11,6 +11,8 @@
   let autoId = 1;
 
   export let maxVisible = 4;
+  export const editable = true;
+  export const focusable = true;
 
   const removeModalById = (id: number) => {
     const index = modalStack.findIndex(
@@ -104,7 +106,7 @@
 </script>
 
 {#if visibleState}
-  <smooth-modal-backdrop>
+  <smooth-modal-backdrop tabindex="0">
     {#each modalStack as { modalComponent, modalProps, id }, index (id)}
       {#if modalsCount - index < maxVisible + 1}
         {#if typeof modalComponent === 'function' || typeof modalComponent === 'string'}
@@ -119,7 +121,7 @@
                 justify-content: flex-start;
                 align-items: center;
                 min-height: 0;
-                max-height: fit-content;
+                max-height: 100%;
                 transform-style: preserve-3d;
                 perspective-origin: 50% 0;
                 pointer-events: {index <

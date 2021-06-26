@@ -1,10 +1,10 @@
 {
   "name": "smooth-modal",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "license": "ISC",
   "author": "Rajko Vukovic",
-  "main": "index.js",
-  "module": "index.mjs",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "scripts": {
     "dev": "rm -rf ./dist && rm -rf ./docs/lib && NODE_ENV=development rollup --config --watch & npm run dev:svelte-demo",
     "build": "rm -rf ./dist && rm -rf ./docs/lib && NODE_ENV=production rollup --config && npm run build:svelte-demo",
